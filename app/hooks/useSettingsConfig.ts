@@ -13,10 +13,12 @@ import {
   ImportIcon,
   ShapesIcon,
   Icon,
+  PlusIcon,
 } from "outline-icons";
 import React, { ComponentProps } from "react";
 import { useTranslation } from "react-i18next";
 import { integrationSettingsPath } from "@shared/utils/routeHelpers";
+import { Integrations } from "~/scenes/Settings/Integrations";
 import ZapierIcon from "~/components/Icons/ZapierIcon";
 import { Hook, PluginManager } from "~/utils/PluginManager";
 import isCloudHosted from "~/utils/isCloudHosted";
@@ -26,6 +28,7 @@ import { useComputed } from "./useComputed";
 import useCurrentTeam from "./useCurrentTeam";
 import useCurrentUser from "./useCurrentUser";
 import usePolicy from "./usePolicy";
+import useStores from "./useStores";
 
 const ApiKeys = lazy(() => import("~/scenes/Settings/ApiKeys"));
 const PersonalApiKeys = lazy(() => import("~/scenes/Settings/PersonalApiKeys"));
@@ -48,15 +51,22 @@ export type ConfigItem = {
   path: string;
   icon: React.FC<ComponentProps<typeof Icon>>;
   component: React.ComponentType;
+  description?: string;
   enabled: boolean;
   group: string;
+  isActive?: boolean;
 };
 
 const useSettingsConfig = () => {
+  const { integrations } = useStores();
   const user = useCurrentUser();
   const team = useCurrentTeam();
   const can = usePolicy(team);
   const { t } = useTranslation();
+
+  React.useEffect(() => {
+    void integrations.fetchAll();
+  }, [integrations]);
 
   const config = useComputed(() => {
     const items: ConfigItem[] = [
@@ -183,6 +193,15 @@ const useSettingsConfig = () => {
         group: t("Integrations"),
         icon: ZapierIcon,
       },
+      {
+        name: t("Install integration…"),
+        path: integrationSettingsPath("all"),
+        component: Integrations,
+        enabled: true,
+        group: t("Integrations"),
+        icon: PlusIcon,
+        isActive: true,
+      },
     ];
 
     // Plugins
@@ -199,10 +218,15 @@ const useSettingsConfig = () => {
             : settingsPath(plugin.id),
         group: t(group),
         component: plugin.value.component,
+        description: plugin.value.description,
         enabled: plugin.value.enabled
           ? plugin.value.enabled(team, user)
           : can.update,
         icon: plugin.value.icon,
+        isActive: integrations.orderedData.some(
+          (integration) =>
+            integration.service.toLowerCase() === plugin.name.toLowerCase()
+        ),
       } as ConfigItem);
     });
 
